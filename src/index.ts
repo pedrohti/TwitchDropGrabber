@@ -13,8 +13,9 @@ const check = require("fs");
 const usage = cmdUsage(usageOptions);
 const args = cmdArgs(cmdOptions);
 
-const { game, timeout, verbose, help, proxy, file } = args;
+const { timeout, verbose, help, proxy, file } = args;
 const headless = !args["no-headless"];
+const game = args["game"].replace(" ", "%20").toLowerCase();
 
 if (help || !(game || file)) {
 	process.exit(0);
@@ -98,8 +99,14 @@ async function streamingGame(page: Page) {
 		'a[data-a-target="stream-game-link"]',
 		{ timeout: 0 }
 	);
-	const href = await page.evaluate((a) => a.getAttribute("href"), gameLink);
-	const streamingGame = href.toLowerCase().endsWith(`/${game.toLowerCase()}`);
+
+	const href = await page
+		.evaluate((a) => a.getAttribute("href"), gameLink);
+	
+	const streamingGame = href
+		.toLowerCase()
+		.endsWith(`/${game.toLowerCase()}`);
+
 	return streamingGame;
 }
 
@@ -130,14 +137,20 @@ async function findChannelFromList(page: Page): Promise<boolean> {
 			else {
 				if (game) {
 					const _streamingGame = await streamingGame(page);
-					vinfo(`Channel streaming the given game: ${_streamingGame}`);
+					vinfo(
+						`Channel streaming the given game: ${_streamingGame}`
+					);
 					if (!_streamingGame) continue;
 				}
 				info("Online channel found!");
 				return true;
 			}
 		}
-		info(chalk.magenta(`No channels online or streaming the selected game! Trying again after the timeout`));
+		info(
+			chalk.magenta(
+				`No channels online or streaming the selected game! Trying again after the timeout`
+			)
+		);
 		return false;
 	} else {
 		info(chalk.magenta(`${file} not found. Please, make sure it exists`));
@@ -212,8 +225,12 @@ async function isLive(channelPage: Page) {
 	);
 	const raid = channelPage.url().includes("?referrer=raid");
 	var _streamingGame;
-	if (!(status?.toLocaleLowerCase() === "offline"))
-		_streamingGame = game ? await streamingGame(channelPage) : true;
+
+	// _streamingGame = game ? await streamingGame(channelPage) : true;
+	_streamingGame = await streamingGame(channelPage);
+
+	if (status == "offline") _streamingGame = false;
+
 	vinfo(`Current url: ${channelPage.url()}`);
 	vinfo(`Channel status: ${status}`);
 	vinfo(`Video duration: ${videoDuration}`);
