@@ -28,7 +28,6 @@ if (!game) {
 var spaceRegex = new RegExp('\\s', 'gm');
 game = game.replace(spaceRegex, '%20').replace(':', '%3A').toLowerCase();
 
-
 if (!process.env.TWITCH_CHROME_EXECUTABLE) {
 	throw new Error('TWITCH_CHROME_EXECUTABLE not set');
 }
@@ -93,6 +92,8 @@ async function findRandomChannel(page: Page) {
 		streams.map((e) => e.getAttribute('href'))
 	);
 
+	info(`${channel.length} channels found: ${channel.join(', ')}`);
+
 	var channelAux = '';
 
 	for (let c of channel) {
@@ -101,21 +102,35 @@ async function findRandomChannel(page: Page) {
 		});
 
 		if (find) continue;
+		// excludedChannels.splice(
+		// 	excludedChannels.findIndex((item) => item === c),
+		// 	1
+		// );
 
-		info(chalk.green(`Channel found: navigating to ${chalk.bold(c)}`));
+		// info(chalk.green(`Channel found: navigating to ${chalk.bold(c)}`));
+
+		info(chalk.green(`Checking ${chalk.yellow.bold(c)}`));
 		await page.goto(`https://twitch.tv${c}`, {
 			waitUntil: ['networkidle2', 'domcontentloaded']
 		});
 
 		if (!(await activeDrops(page))) {
-			info(chalk.magenta(`No drops active for ${c}`));
+			info(chalk.magenta(`No active drops for ${c}`));
 			excludedChannels.push(c ?? '');
 		} else {
 			channelAux = c ?? '';
 			break;
 		}
 	}
-	info(chalk.green(`Drops Habilitados para ${chalk.bold(channelAux)}`));
+	if (channelAux != '') {
+		console.clear();
+		info(chalk.green(`Drops Active for ${chalk.bold(channelAux)}`));
+		info(chalk.green(`Watching...`));
+	} else {
+		info(chalk.green(`No channel with drops active! Exiting...`));
+		excludedChannels = [];
+		process.exit(0);
+	}
 }
 
 let list: string[];
@@ -146,7 +161,9 @@ async function channelExists(page: Page) {
 
 async function activeDrops(page: Page) {
 	// TODO: need more validation
-	return (await page.$('div[class="highlight__click-target"]')) ? true : false;
+	// var x = (await page.$('div[class="highlight__click-target"]')) ? true : false;
+	var x = (await page.$('p[class="CoreText-sc-cpl358-0 iiqKwk"]')) ? true : false;
+	return x;
 }
 
 async function findChannelFromList(page: Page): Promise<boolean> {
@@ -274,10 +291,6 @@ async function checkLiveStatus(channelPage: Page) {
 		return;
 	} else if (!streamingGame) {
 		info('Channel not streaming game');
-		await findOnlineChannel(channelPage);
-		return;
-	} else if (!drops) {
-		info(chalk.magenta(`No drops active`));
 		await findOnlineChannel(channelPage);
 		return;
 	}
