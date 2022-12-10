@@ -88,8 +88,9 @@ async function findRandomChannel(page: Page) {
 	// 	timeout: 0
 	// });
 	// const channel = await page.evaluate((a) => a?.getAttribute('href'), aHandle);
-	const channel = await page.$$eval('[data-a-target="preview-card-image-link"]', (streams) =>
-		streams.map((e) => e.getAttribute('href'))
+	const channel = await page.$$eval(
+		'[data-a-target="preview-card-image-link"]',
+		(streams) => streams.map((e) => e.getAttribute('href'))
 	);
 
 	info(`${channel.length} channels found: ${channel.join(', ')}`);
@@ -124,10 +125,10 @@ async function findRandomChannel(page: Page) {
 	}
 	if (channelAux != '') {
 		console.clear();
-		info(chalk.green(`Drops Active for ${chalk.bold(channelAux)}`));
+		info(chalk.green(`Active drops for ${chalk.bold(channelAux)}`));
 		info(chalk.green(`Watching...`));
 	} else {
-		info(chalk.green(`No channel with drops active! Exiting...`));
+		info(chalk.green(`No channel with active drops! Exiting...`));
 		excludedChannels = [];
 		process.exit(0);
 	}
@@ -143,27 +144,55 @@ async function readList() {
 }
 
 async function streamingGame(page: Page) {
-	const gameLink = await page.waitForSelector('a[data-a-target="stream-game-link"]', {
-		timeout: 0
-	});
+	const gameLink = await page.waitForSelector(
+		'a[data-a-target="stream-game-link"]',
+		{
+			timeout: 0
+		}
+	);
 
 	const href = await page.evaluate((a) => a?.getAttribute('href'), gameLink);
 
-	const streamingGame = href?.toLowerCase().endsWith(`/${game.toLowerCase()}`);
+	const streamingGame = href
+		?.toLowerCase()
+		.endsWith(`/${game.toLowerCase()}`);
 
 	return streamingGame;
 }
 
 async function channelExists(page: Page) {
 	// TODO: need more validation
-	return (await page.$('p[data-a-target="core-error-message"]')) ? true : false;
+	return (await page.$('p[data-a-target="core-error-message"]'))
+		? true
+		: false;
 }
 
 async function activeDrops(page: Page) {
 	// TODO: need more validation
-	// var x = (await page.$('div[class="highlight__click-target"]')) ? true : false;
-	var x = (await page.$('p[class="CoreText-sc-cpl358-0 iiqKwk"]')) ? true : false;
-	return x;
+
+	var result; // = (await page.$('p[class="CoreText-sc-cpl358-0 iiqKwk"]')) ? true : false;
+
+	// const extractedText = await page.$eval('p', (el) => el.outerHTML);
+
+	// const extractedText = await page.$$eval('p', (text) =>
+	// 	text.map((e) => e.innerHTML.toLowerCase().includes('drops'))
+	// );
+
+	const extractedText = await page.evaluate(() => window.find('drops'));
+
+	console.log('🚀 ~ activeDrops ~ extractedText', extractedText);
+
+	// x = extractedText.map((z) => {
+	// 	return z.toLocaleLowerCase().includes('drops') ? true : false;
+	// });
+
+	// for (let z in extractedText) {
+	// 	console.log('🚀 ~ activeDrops ~ z', z);
+
+	// 	if (z.toLocaleLowerCase().includes('drops')) x = true;
+	// }
+
+	return extractedText;
 }
 
 async function findChannelFromList(page: Page): Promise<boolean> {
@@ -186,11 +215,13 @@ async function findChannelFromList(page: Page): Promise<boolean> {
 			else {
 				if (game) {
 					const _streamingGame = await streamingGame(page);
-					vinfo(`Channel streaming the given game: ${_streamingGame}`);
+					vinfo(
+						`Channel streaming the given game: ${_streamingGame}`
+					);
 					if (!_streamingGame) continue;
 				}
 				if (!(await activeDrops(page))) {
-					info(chalk.magenta(`No drops active for ${channel}`));
+					info(chalk.magenta(`No active drops for ${channel}`));
 					return false;
 				}
 				info('Online channel found!');
@@ -226,7 +257,7 @@ async function findOnlineChannel(page: Page) {
 				await backupPage.setViewport({ width: 1280, height: 720 });
 				await findRandomChannel(backupPage);
 				// if (!(await activeDrops(backupPage))) {
-				// 	info(chalk.magenta(`No drops active`));
+				// 	info(chalk.magenta(`No active drops`));
 				// 	await findRandomChannel(backupPage);
 				// }
 			} else {
@@ -250,10 +281,16 @@ async function checkInventory(inventory: Page) {
 	const claimButtons = await inventory.$$(
 		'button[data-test-selector="DropsCampaignInProgressRewardPresentation-claim-button"]'
 	);
-	vinfo(`${claimButtons.length} claim buttons found${claimButtons.length > 0 ? '!' : '.'}`);
+	vinfo(
+		`${claimButtons.length} claim buttons found${
+			claimButtons.length > 0 ? '!' : '.'
+		}`
+	);
 
 	if (claimButtons.length > 0) {
-		info(`${claimButtons.length} drops found! Please head to ${INVENTORY_URL} to claim them!`);
+		info(
+			`${claimButtons.length} drops found! Please head to ${INVENTORY_URL} to claim them!`
+		);
 	}
 	// for (const claimButton of claimButtons) {
 	//   info("Reward found! Claiming!");
@@ -265,7 +302,9 @@ async function checkInventory(inventory: Page) {
 
 async function isLive(channelPage: Page) {
 	await channelPage.bringToFront();
-	const status = await channelPage.$$eval('a[status]', (li) => li.pop()?.getAttribute('status'));
+	const status = await channelPage.$$eval('a[status]', (li) =>
+		li.pop()?.getAttribute('status')
+	);
 	const videoDuration = await channelPage.$$eval(
 		'video',
 		(videos) => (videos.pop() as HTMLVideoElement)?.currentTime
@@ -273,18 +312,27 @@ async function isLive(channelPage: Page) {
 	const raid = channelPage.url().includes('?referrer=raid');
 	const drops = (await activeDrops(channelPage)) ? true : false;
 
-	var _streamingGame = status != 'offline' ? await streamingGame(channelPage) : false;
+	var _streamingGame =
+		status != 'offline' ? await streamingGame(channelPage) : false;
 
 	vinfo(`Current url: ${channelPage.url()}`);
 	vinfo(`Channel status: ${status}`);
 	vinfo(`Video duration: ${videoDuration}`);
 	vinfo(`Streaming game: ${_streamingGame}`);
 	const notLive = status !== 'live' || videoDuration === 0;
-	return { videoDuration, notLive, raid, streamingGame: _streamingGame, drops };
+	return {
+		videoDuration,
+		notLive,
+		raid,
+		streamingGame: _streamingGame,
+		drops
+	};
 }
 
 async function checkLiveStatus(channelPage: Page) {
-	const { videoDuration, notLive, raid, streamingGame, drops } = await isLive(channelPage);
+	const { videoDuration, notLive, raid, streamingGame, drops } = await isLive(
+		channelPage
+	);
 	if (notLive || raid) {
 		info(chalk.red('Channel offline'));
 		await findOnlineChannel(channelPage);
