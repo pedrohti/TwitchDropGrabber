@@ -13,7 +13,7 @@ const check = require('fs');
 const usage = cmdUsage(usageOptions);
 const args = cmdArgs(cmdOptions);
 
-const { timeout, verbose, help, proxy, file } = args;
+const { timeout, infinity, verbose, help, proxy, file } = args;
 const headless = !args['no-headless'];
 var game = args['game'];
 
@@ -44,6 +44,8 @@ function formatLog(msg: string) {
 
 function info(msg: string) {
 	console.info(formatLog(msg));
+	// TODO: single line console
+	// process.stdout.write(formatLog(msg).padEnd(50) + '\x1b[0G');
 }
 
 function vinfo(msg: string) {
@@ -103,12 +105,6 @@ async function findRandomChannel(page: Page) {
 		});
 
 		if (find) continue;
-		// excludedChannels.splice(
-		// 	excludedChannels.findIndex((item) => item === c),
-		// 	1
-		// );
-
-		// info(chalk.green(`Channel found: navigating to ${chalk.bold(c)}`));
 
 		info(chalk.green(`Checking ${chalk.yellow.bold(c)}`));
 		await page.goto(`https://twitch.tv${c}`, {
@@ -116,7 +112,6 @@ async function findRandomChannel(page: Page) {
 		});
 
 		if (!(await activeDrops(page))) {
-			info(chalk.magenta(`No active drops for ${c}`));
 			excludedChannels.push(c ?? '');
 		} else {
 			channelAux = c ?? '';
@@ -125,12 +120,19 @@ async function findRandomChannel(page: Page) {
 	}
 	if (channelAux != '') {
 		console.clear();
-		info(chalk.green(`Active drops for ${chalk.bold(channelAux)}`));
+		info(
+			chalk.green(`Active drops for https://www.twitch.tv${chalk.bold(channelAux)}`)
+		);
 		info(chalk.green(`Watching...`));
 	} else {
-		info(chalk.green(`No channel with active drops! Exiting...`));
-		excludedChannels = [];
-		process.exit(0);
+		if (infinity && channelAux == '') {
+			excludedChannels = [];
+			info(chalk.yellow(`No channel with drops. Keep searching...`));
+			findRandomChannel(page);
+		} else {
+			info(chalk.green(`No channel with active drops! Exiting...`));
+			process.exit(0);
+		}
 	}
 }
 
@@ -144,33 +146,29 @@ async function readList() {
 }
 
 async function streamingGame(page: Page) {
-	const gameLink = await page.waitForSelector(
-		'a[data-a-target="stream-game-link"]',
-		{
-			timeout: 0
-		}
-	);
+	const gameLink = await page.waitForSelector('a[data-a-target="stream-game-link"]', {
+		timeout: 0
+	});
 
 	const href = await page.evaluate((a) => a?.getAttribute('href'), gameLink);
 
-	const streamingGame = href
-		?.toLowerCase()
-		.endsWith(`/${game.toLowerCase()}`);
+	const streamingGame = href?.toLowerCase().endsWith(`/${game.toLowerCase()}`);
 
 	return streamingGame;
 }
 
 async function channelExists(page: Page) {
 	// TODO: need more validation
-	return (await page.$('p[data-a-target="core-error-message"]'))
-		? true
-		: false;
+	return (await page.$('p[data-a-target="core-error-message"]')) ? true : false;
 }
 
 async function activeDrops(page: Page) {
 	// TODO: need more validation
 
-	var result; // = (await page.$('p[class="CoreText-sc-cpl358-0 iiqKwk"]')) ? true : false;
+	// = (await page.$('p[class="CoreText-sc-cpl358-0 iiqKwk"]')) ? true : false;
+
+	var activeDrops = (await page.$('.tw-card-image')) ? true : false;
+	return activeDrops;
 
 	// const extractedText = await page.$eval('p', (el) => el.outerHTML);
 
@@ -178,9 +176,9 @@ async function activeDrops(page: Page) {
 	// 	text.map((e) => e.innerHTML.toLowerCase().includes('drops'))
 	// );
 
-	const extractedText = await page.evaluate(() => window.find('drops'));
+	// const extractedText = await page.evaluate(() => window.find('drops'));
 
-	console.log('🚀 ~ activeDrops ~ extractedText', extractedText);
+	// console.log('🚀 ~ activeDrops ~ extractedText', extractedText);
 
 	// x = extractedText.map((z) => {
 	// 	return z.toLocaleLowerCase().includes('drops') ? true : false;
@@ -191,8 +189,6 @@ async function activeDrops(page: Page) {
 
 	// 	if (z.toLocaleLowerCase().includes('drops')) x = true;
 	// }
-
-	return extractedText;
 }
 
 async function findChannelFromList(page: Page): Promise<boolean> {
@@ -215,15 +211,10 @@ async function findChannelFromList(page: Page): Promise<boolean> {
 			else {
 				if (game) {
 					const _streamingGame = await streamingGame(page);
-					vinfo(
-						`Channel streaming the given game: ${_streamingGame}`
-					);
+					vinfo(`Channel streaming the given game: ${_streamingGame}`);
 					if (!_streamingGame) continue;
 				}
-				if (!(await activeDrops(page))) {
-					info(chalk.magenta(`No active drops for ${channel}`));
-					return false;
-				}
+				if (!(await activeDrops(page))) return false;
 				info('Online channel found!');
 				return true;
 			}
@@ -282,9 +273,7 @@ async function checkInventory(inventory: Page) {
 		'button[data-test-selector="DropsCampaignInProgressRewardPresentation-claim-button"]'
 	);
 	vinfo(
-		`${claimButtons.length} claim buttons found${
-			claimButtons.length > 0 ? '!' : '.'
-		}`
+		`${claimButtons.length} claim buttons found${claimButtons.length > 0 ? '!' : '.'}`
 	);
 
 	if (claimButtons.length > 0) {
@@ -302,31 +291,52 @@ async function checkInventory(inventory: Page) {
 
 async function isLive(channelPage: Page) {
 	await channelPage.bringToFront();
-	const status = await channelPage.$$eval('a[status]', (li) =>
-		li.pop()?.getAttribute('status')
-	);
-	const videoDuration = await channelPage.$$eval(
+	var status = await channelPage.$$eval('a[status]', (li) => {
+		return li.pop()?.getAttribute('status');
+	});
+
+	console.log('🚀 ~ file: index.ts:299 ~ isLive ~ status', status);
+
+	var videoDuration = await channelPage.$$eval(
 		'video',
 		(videos) => (videos.pop() as HTMLVideoElement)?.currentTime
 	);
-	const raid = channelPage.url().includes('?referrer=raid');
-	const drops = (await activeDrops(channelPage)) ? true : false;
+	var raid;
+	var drops;
+	var notLive;
+	var _streamingGame;
 
-	var _streamingGame =
-		status != 'offline' ? await streamingGame(channelPage) : false;
+	if (status != 'offline') {
+		raid = channelPage.url().includes('?referrer=raid');
+		drops = (await activeDrops(channelPage)) ? true : false;
 
-	vinfo(`Current url: ${channelPage.url()}`);
-	vinfo(`Channel status: ${status}`);
-	vinfo(`Video duration: ${videoDuration}`);
-	vinfo(`Streaming game: ${_streamingGame}`);
-	const notLive = status !== 'live' || videoDuration === 0;
-	return {
-		videoDuration,
-		notLive,
-		raid,
-		streamingGame: _streamingGame,
-		drops
-	};
+		_streamingGame = (await streamingGame(channelPage)) ? true : false;
+
+		vinfo(`Current url: ${channelPage.url()}`);
+		vinfo(`Channel status: ${status}`);
+		vinfo(`Video duration: ${videoDuration}`);
+		vinfo(`Streaming game: ${_streamingGame}`);
+		notLive = status !== 'live' || videoDuration === 0;
+		return {
+			videoDuration,
+			notLive,
+			raid,
+			streamingGame: _streamingGame,
+			drops
+		};
+	} else {
+		vinfo(`Current url: ${channelPage.url()}`);
+		vinfo(`Channel status: ${status}`);
+		vinfo(`Video duration: ${videoDuration}`);
+		vinfo(`Streaming game: ${_streamingGame}`);
+		return {
+			videoDuration,
+			notLive,
+			raid,
+			streamingGame: _streamingGame,
+			drops
+		};
+	}
 }
 
 async function checkLiveStatus(channelPage: Page) {
@@ -366,6 +376,8 @@ async function runTimer(page: Page, inventory: Page) {
 
 async function run() {
 	info('Starting application');
+	info(`Infinity Mode: ${infinity ? chalk.green('ON') : chalk.red('OFF')}!`);
+
 	browser = await puppeteer.launch({
 		executablePath: process.env.TWITCH_CHROME_EXECUTABLE,
 		headless: headless,
